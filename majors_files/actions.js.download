@@ -1,0 +1,871 @@
+/*-------------------------------------------------------------------
+Author: Nathan Walsh <nwalsh@awareweb.com>
+Author: Justin Herrera <jherrera@awareweb.com>
+Version: 0.3.2
+-------------------------------------------------------------------*/
+$(document).ready(function () { AwareWeb.init(); });
+
+
+(function ($) {
+    function AwareWeb() {
+
+        // 'Private' Variables
+        var isWebkit = 'WebkitAppearance' in document.documentElement.style,
+			isFirefox = typeof InstallTrigger !== 'undefined',
+			isWindows = navigator.platform.indexOf('Win') > -1;
+
+
+        //-----------------------------------------------------------------------------------------
+        // Initiate Project
+        //-----------------------------------------------------------------------------------------
+        this.init = function () {
+
+            // Additional Initiate Calls
+            initiateCarousels();
+            initiateModals();
+            initiateOffcanvas();
+            initiateStickyComponents();
+            initiateLinkableComponents();
+            initiateBkgrdVideos();
+            // initiateInstagram(); has been removed. The gallery is now built in code and
+            // the event stuff is hooked up in initiateMisc()
+            initiateMisc();
+        };
+
+        // YouTube Init Function for Slider Puasing while playing
+        this.customYouTubeSliderInit = function () {
+            $.each($('.component.slider').find('iframe[src*="youtube"]'), function (i) {
+                var oThis = $(this),
+                    tmpPlayer;
+
+                // Add player to array
+                tmpPlayer = new YT.Player(oThis.attr('id'), {
+                    events: {
+                        'onStateChange': function (event) {
+                            switch (event.data) {
+                                case 0: // ended
+                                case 2: // paused
+                                    // Enable sliding of carousel
+                                    oThis.closest('div.carousel').carousel();
+                                    break;
+                                case 1: // playing
+                                    // Pause sliding of carousel
+                                    oThis.addClass('initiated').closest('div.carousel').carousel('pause');
+                                    break;
+                            }
+                        }
+                    }
+                });
+            });
+        };
+
+
+        //-----------------------------------------------------------------------------------------
+        // Initiate Carousels
+        //-----------------------------------------------------------------------------------------
+        function initiateCarousels() {
+
+            // Carousels (Bootstrap)
+            $('#carousel-main').carousel({
+                interval: 5000,
+                pause: "hover"
+            });
+
+            $('.spotlight-carousel').carousel({
+                interval: 0
+            });
+
+            // Gallery Carousels (Slick)
+            $('.gallery-carousel.page-items-3').slick({
+                dots: true,
+                slidesToShow: 3,
+                slidesToScroll: 3,
+                responsive: [
+                    {
+                        breakpoint: 768,
+                        settings: {
+                            slidesToShow: 2,
+                            slidesToScroll: 2
+                        }
+                    },
+                    {
+                        breakpoint: 480,
+                        settings: {
+                            slidesToShow: 1,
+                            slidesToScroll: 1
+                        }
+                    }
+                ]
+            });
+
+
+            // New Carousels
+
+            // Slider & Videos (also refer to YouTube init above)
+
+            // Pause video when carousel slides(user clicks arrows/indicators)
+            $('.component.slider').find('div.carousel').on('slid.bs.carousel', function (e) {
+                var oIframe = $(this).find('div.item:not(.active)').find('iframe[src*="youtube"]');
+
+                // Only trigger this on actual videos
+                if (oIframe.length > 0 && oIframe.hasClass('initiated')) {
+                    oIframe[0].contentWindow.postMessage('{"event":"command","func":"' + 'pauseVideo' + '","args":""}', '*');
+                }
+            });
+        }
+
+
+        //-----------------------------------------------------------------------------------------
+        // Initiate Modals
+        //-----------------------------------------------------------------------------------------
+        function initiateModals() {
+            // Email Links
+            $('a.emailLink').attr({
+                'data-toggle': 'modal',
+                'data-target': '#modal-emailLink'
+            }).on('show.bs.modal', function (e) {
+                var oThis = $(this),
+					oModal = $('#modal-emailLink'),
+					oImage = oModal.find('div.image').find('img');
+
+                // Hide Image/Unload
+                oImage.attr('src', '').addClass('hidden');
+
+                // Update Image Src
+                // oModal.find('div.image').find('img').attr('src', oThis.attr('href'));
+                });
+
+            /** Add this class to a social sharing link to make it pop up in a window **/
+            $('.bsushare').on("click", function (e) {
+                $(this).customerPopup(e);
+            });
+
+            /**
+             * Function to take the href * and the title to make a share popup
+             *
+             * @param  {[object]} e           [Mouse event]
+             */
+            $.fn.customerPopup = function (e) {
+
+                // Prevent default anchor event
+                e.preventDefault();
+
+                var scrw = screen.width;
+                var scrh = screen.height;
+                var winw = 500;
+                var winh = 400;
+
+                var winTop = (scrh / 2) - (winh / 2);
+                var winLeft = (scrw / 2) - (winw / 2);
+
+                strResize = 'yes';
+
+                // Set title and open popup with focus on it
+                var strTitle = ((typeof this.attr('title') !== 'undefined') ? this.attr('title') : 'Social Share'),
+                    strParam = 'width=' + winw + ',height=' + winh + ',top=' + winTop + ',left=' + winLeft + ',resizable=' + strResize,
+                    objWindow = window.open(this.attr('href'), strTitle, strParam).focus();
+            };
+        }
+
+
+        //-----------------------------------------------------------------------------------------
+        // Initiate Offcanvas
+        //-----------------------------------------------------------------------------------------
+        function initiateOffcanvas() {
+
+            // Toggle X
+            $('.offcanvas-toggle').on('click', function (e) {
+                var oThis = $(this),
+					iCurrentBreakpoint = getBreakpointIndex();
+                oOverlay = $('#offcanvasOverlay'),
+                oTimer = oOverlay.data('timer'),
+                sCloseIcon = oThis.data('close_icon');
+
+                // Change action based on state
+                if (oThis.hasClass('active')) {
+                    oThis.removeClass('active');
+
+                    // Swap icons
+                    if (!sCloseIcon) {
+                        oThis.addClass('collapsed');
+                    } else { oThis.find('i.fa').removeClass(sCloseIcon); }
+
+                    // clear timeout
+                    oOverlay.data('timer', clearTimeout(oTimer));
+
+                } else { // currently closed
+                    oThis.addClass('active');
+
+                    // Swap icons
+                    if (!sCloseIcon) {
+                        oThis.removeClass('collapsed');
+                    } else { oThis.find('i.fa').addClass(sCloseIcon); }
+
+                    // Add timer
+                    oOverlay.data('timer', setInterval(function () {
+                        var iCheckedBreakpoint = getBreakpointIndex();
+
+                        // Compare Breakpoints and if not the same, reset
+                        if (iCurrentBreakpoint !== iCheckedBreakpoint) {
+                            var oActive = $('.offcanvas-toggle.active'),
+								sCloseIcon = oActive.data('close_icon');
+
+                            oActive.trigger('click');
+
+                            // clear timeout
+                            oOverlay.data('timer', clearTimeout(oTimer));
+                        }
+
+                    }, 250));
+                }
+            });
+
+            // Offcanvas click
+            $('#offcanvasOverlay').on('click', function (e) {
+                $('.offcanvas-toggle.active').trigger('click');
+                e.preventDefault();
+            });
+
+            // Flip bar click
+            $('#ibeenclicked').on('click', function (e) {
+                // Needed in conjuction with the document click function below otherwise
+                // remove it.
+                e.stopPropagation();
+                var dropMenu = $('#dropsubmenu');
+                var secMenu = $('#secondaryNav');
+                if (dropMenu.hasClass('active') || secMenu.hasClass('active')) {
+                    dropMenu.removeClass('active');
+                    secMenu.removeClass('active');
+                    $('#ibcIcon').addClass('collapsed');
+                    $('#ibcSR').text('Open for More Navigation');
+                    $('#ibcVis').text('Open for More Navigation');
+                }
+                else {
+                    dropMenu.addClass('active');
+                    secMenu.addClass('active');
+                    $('#ibcIcon').removeClass('collapsed');
+                    $('#ibcSR').text('Tap to close');
+                    $('#ibcVis').text('Tap to close');
+                }
+                e.preventDefault();
+            });
+
+            // Make it so that we can click off the menu to close it.
+            $(document).click(function () {
+                var dropMenu = $('#dropsubmenu');
+                var secMenu = $('#secondaryNav');
+                if (dropMenu.hasClass('active') || secMenu.hasClass('active')) {
+                    dropMenu.removeClass('active');
+                    secMenu.removeClass('active');
+                    $('#ibcIcon').addClass('collapsed');
+                    $('#ibcSR').text('Open for More Navigation');
+                    $('#ibcVis').text('Open for More Navigation');
+                }
+            });
+
+            // Use escape key to close menu also
+            $(document).on('keydown', function (e) {
+                if (e.keyCode === 27) { // ESC
+                    $('.offcanvas-toggle.active').trigger('click');
+                    e.preventDefault();
+                }
+            });
+            /**
+			 * Get Breakpoint Index
+			 * @return {int} iIndex; array index of bootstrap breakpoints
+			 */
+            function getBreakpointIndex() {
+                var iWidth = $(window).width(),
+					oBreakpoints = [0, 480, 768, 992, 1200, 99999], // default bootstrap breakpoints
+					iBreakpointIndex = -1; // assumes window is too large by default
+
+                // Determine which breakpoint we are on
+                $.each(oBreakpoints, function (i) {
+                    if (oBreakpoints[i] === 99999) {
+                        return;
+                    } else if (iWidth >= oBreakpoints[i] && iWidth <= oBreakpoints[i + 1]) {
+                        iBreakpointIndex = i;
+                    }
+                });
+
+                return iBreakpointIndex;
+            }
+        }
+
+
+        //-----------------------------------------------------------------------------------------
+        // Initiate Sticky Components
+        //-----------------------------------------------------------------------------------------
+        function initiateStickyComponents() {
+
+            // Landing Page - Utility Bar
+            if ($('#template').hasClass('landing')) {
+                $('#navUtility').scrollToFixed({
+                    spacerClass: 'stickyNavUtilitySpacer',
+                    fixed: function () {
+                        var oThis = $('#navUtility'),
+							iHeight = oThis.outerHeight();
+
+                        if (oThis.hasClass('scroll-to-fixed-fixed')) {
+                            $('div.stickyNavUtilitySpacer').height(iHeight);
+                        }
+                    },
+                    unfixed: function () {
+                        $('div.stickyNavUtilitySpacer').height(0);
+                    }
+                });
+            }
+
+            // Subpage - Page Header
+            if ($('#template').hasClass('subpage')) {
+
+                $('#navUtility').scrollToFixed({
+                    spacerClass: 'stickyNavUtilitySpacer',
+                    fixed: function () {
+                        var oThis = $('#navUtility'),
+                            iHeight = oThis.outerHeight();
+
+                        if (oThis.hasClass('scroll-to-fixed-fixed')) {
+                            $('div.stickyNavUtilitySpacer').height(iHeight);
+                        }
+                    },
+                    unfixed: function () {
+                        $('div.stickyNavUtilitySpacer').height(0);
+                    }
+                });
+
+                $('div.sidebar').scrollToFixed({
+                    marginTop: function () {
+                        // Use this fudge factor to add space below the bottom of the sticky
+                        // sidebar.
+                        var marginfudge = 20;
+                        var johnny = ($(window).height() - $('div.sidebar').outerHeight()) - marginfudge;
+                        // We aren't sticking the header anymore
+                        //var tommy = $('div.page-header').outerHeight();
+                        var tommy = 0;
+                        if (tommy < 150)
+                        {
+                            // The new top bar is taller now so bump this to 80 from 60.
+                            tommy = tommy + 80;
+                        }
+                        else
+                        {
+                            tommy = tommy - 20;
+                        }
+
+                        if (johnny > tommy)
+                        {
+                            return tommy;
+                        }
+                        else
+                        {
+                            return johnny;
+                        }
+                    },
+                    limit: function () {
+                        var lemmy = $('div.main-content').offset().top + $('div.main-content').outerHeight() - $(window).height();
+                        if (lemmy < 150)
+                        {
+                            lemmy = 150;
+                        }
+                        else
+                        {
+                            lemmy = lemmy + 150;
+                        }
+                        return lemmy;
+                    },
+                    spacerClass: 'stickySubMenuSpacer',
+                    zIndex: 30,
+                    unfixed: function () {
+                        var oThis = $('div.sidebar'),
+                            oSubmenu = $('#submenu');
+                        iHeight = (oThis.offset().top + oThis.outerHeight()) - ($('div.main-content').offset().top + $('div.main-content').outerHeight());
+                        if (iHeight < 0) {
+                            iHeight = 0;
+                        }
+                        if (oThis.hasClass('scroll-to-fixed-fixed')) {
+                            $('div.stickySubMenuSpacer').height(iHeight);
+                        }
+                    },
+                    fixed: function () {
+                        //$('div.stickySubMenuSpacer').height(oThis.outerHeight());
+                    }
+                });
+
+                // Removed page header sticky-ness from here
+                // Only apply to H1 on mobile
+                $('div.page-header').find('#phtitlecontrolh1').scrollToFixed({
+                    maxWidth: 991,
+                    spacerClass: 'stickyH1Spacer',
+                    zIndex: 999,
+                    fixed: function () {
+                        var oThis = $('div.page-header').find('#phtitlecontrolh1'),
+                            iHeight = oThis.outerHeight();
+
+                        if (oThis.hasClass('scroll-to-fixed-fixed')) {
+                            $('div.stickyH1Spacer').height(iHeight);
+                        }
+                    },
+                    unfixed: function () {
+                        $('div.stickyH1Spacer').height(0);
+                    }
+                });
+            }
+        }
+
+        //-----------------------------------------------------------------------------------------
+        // Initiate Linkable Components
+        //-----------------------------------------------------------------------------------------
+        function initiateLinkableComponents() {
+            var sHash = document.location.hash,
+                isMobile = $(window).width() < 768 ? true : false,
+				iPanelAdjustment = 0,
+				oTemplate = $('#template'),
+				isLandingPage = oTemplate.hasClass('landing'),
+				isSubPage = oTemplate.hasClass('subpage');
+
+            if (sHash) {
+                // Get any true accordion sections to which we might link.
+                // It doesn't matter if we are on mobile or desktop
+                var oAccordion = $('div.panel-collapse[data-anchor="' + sHash + '"]');
+
+                // This is so the old pseudo-tabs still work after change to the new code.
+                // We need to remove the random number that accordionV2 appends to the hrefs and ids
+                var collapseLoc = sHash.indexOf("collapse");
+                var underLoc = sHash.indexOf("_");
+                var trimmedHash = "";
+                if (underLoc >= 0 && collapseLoc == 1) {
+                    trimmedHash = sHash.substring(1, underLoc);
+                    var myselector = "div[id*=" + trimmedHash + "]";
+                    var oElement = $(myselector);
+                }
+                else {
+                    oElement = $(sHash);
+                }
+
+                // Tabs and their mobile pseudo-tab accordion alter egos have the same data-anchor
+                // values so we need to decide if we are mobile or not before searching for elements.
+                if (!isMobile) {
+                    // New style and old style tabs
+                    oTab = $('.nav-tabs a[href="' + sHash + '"]');
+                    nTab = $('.nav-tabs a[data-anchor="' + sHash + '"]');
+                }
+                else {
+                    // New style mobile pseudo-tab
+                    aElement = $('div.tab-collapsable[data-anchor="' + sHash + '"]');
+                }
+                if (typeof oTab != "undefined" && oTab.length) {
+                    // This is to make sure the old tab links still work after we
+                    // change the code to use the new data-anchor attribute.
+                    // Open a tab if we have one.
+                    if (!isMobile) {
+                        oTab.tab('show');
+                    } else { // Tabs become accordions on mobile
+                        $(oElement.children('a.btn').attr('href')).collapse('show');
+                    }
+
+                    // Open the tab when converted to an accordion.
+                    oElement.collapse('show');
+
+                    // Add height of link (the actual #hash is the content so its lower on the page but the user should see the item that opened it)
+                    if (oElement.hasClass('panel-collapse')) {
+                        iPanelAdjustment = $(sHash).siblings('div.panel-heading').height();
+                    }
+
+                    // Adjust window scroll position (current - heightAdjustment)
+                    setTimeout(function () {
+
+                        var iTotalAdjustment = 0;
+                        if ($('div.stickyH1Spacer') != null) {
+                            iTotalAdjustment = iTotalAdjustment + $('div.stickyH1Spacer').height();
+                        }
+                        if ($('div.stickyPageHeaderSpacer') != null) {
+                            iTotalAdjustment = iTotalAdjustment + $('div.stickyPageHeaderSpacer').height();
+                        }
+                        if ($('div.stickyNavUtilitySpacer') != null) {
+                            iTotalAdjustment = iTotalAdjustment + $('div.stickyNavUtilitySpacer').height();
+                        }
+                        if ($('#navUtility') != null) {
+                            iTotalAdjustment = iTotalAdjustment + $('#navUtility').height();
+                        }
+
+                        var oTarget = 0;
+
+                        // Change oTarget
+                        if (!isMobile & oTab.length > 0) { // tab element
+                            oTarget = oTab.closest('ul.nav-tabs');
+                        } else { // accordion
+
+                            if (oTab.length > 0) { // tab div is now visible permanetly so use that as point of reference
+                                oTarget = oElement;
+                            } else { // normal accordion
+                                oTarget = oElement.closest('div.panel-accordion');
+                            }
+                        }
+                        // 4/13/2018 Added the check on oTarget because if the hash doesn't match anything
+                        // oTarget is undefined and we get an error.
+                        if (oTarget.length) {
+                            $('body,html').scrollTop(oTarget.offset().top - iTotalAdjustment);
+                        }
+                    }, 100);
+                }
+                else if (typeof nTab != "undefined" && nTab.length) {
+                    // This is for the new tabs that use the data-anchor attribute.
+                    // We should refactor this code.
+                    if (!isMobile) {
+                        nTab.tab('show');
+                    } else { // Tabs become accordions on mobile
+                        $(oElement.children('a.btn').attr('href')).collapse('show');
+                    }
+
+                    // Open the tab when converted to an accordion.
+                    oElement.collapse('show');
+
+                    // Add height of link (the actual #hash is the content so its lower on the page but the user should see the item that opened it)
+                    if (oElement.hasClass('panel-collapse')) {
+                        iPanelAdjustment = $(sHash).siblings('div.panel-heading').height();
+                    }
+
+                    // Adjust window scroll position (current - heightAdjustment)
+                    setTimeout(function () {
+                        var iTotalAdjustment = 0;
+                        if ($('div.stickyH1Spacer') != null) {
+                            iTotalAdjustment = iTotalAdjustment + $('div.stickyH1Spacer').height();
+                        }
+                        if ($('div.stickyPageHeaderSpacer') != null) {
+                            iTotalAdjustment = iTotalAdjustment + $('div.stickyPageHeaderSpacer').height();
+                        }
+                        if ($('div.stickyNavUtilitySpacer') != null) {
+                            iTotalAdjustment = iTotalAdjustment + $('div.stickyNavUtilitySpacer').height();
+                        }
+                        if ($('#navUtility') != null) {
+                            iTotalAdjustment = iTotalAdjustment + $('#navUtility').height();
+                        }
+
+                        // Change oTarget
+                        if (!isMobile & nTab.length > 0) { // tab element
+                            oTarget = nTab.closest('ul.nav-tabs');
+                        } else { // accordion
+                            if (nTab.length > 0) { // tab div is now visible permanently so use that as point of reference
+                                oTarget = oElement;
+                            } else { // normal accordion
+                                oTarget = oElement.closest('div.panel-accordion');
+                            }
+                        }
+
+                        // 4/13/2018 Added the check on oTarget because if the hash doesn't match anything
+                        // oTarget is undefined and we get an error.
+                        if (typeof oTarget != "undefined" && oTarget.length) {
+                            // Not sure why but we need this 40 fudge factor for the content top margin.
+                            iTotalAdjustment = iTotalAdjustment + oTarget.height() + 40;
+                            $('body,html').scrollTop(oTarget.offset().top - iTotalAdjustment);
+                        }
+                    }, 100);
+                }
+                else if (typeof oAccordion != "undefined" && oAccordion.length) {
+                    // Open a native accordion if we found one.
+                    oCord = $(oAccordion);
+                    oCord.collapse('show');
+                    // Bring it into view.
+                    setTimeout(function () {
+                        var iTotalAdjustment = 0;
+                        if ($('div.stickyH1Spacer') != null) {
+                            iTotalAdjustment = iTotalAdjustment + $('div.stickyH1Spacer').height();
+                        }
+                        if ($('div.stickyPageHeaderSpacer') != null) {
+                            iTotalAdjustment = iTotalAdjustment + $('div.stickyPageHeaderSpacer').height();
+                        }
+                        if ($('div.stickyNavUtilitySpacer') != null) {
+                            iTotalAdjustment = iTotalAdjustment + $('div.stickyNavUtilitySpacer').height();
+                        }
+                        if ($('#navUtility') != null) {
+                            iTotalAdjustment = iTotalAdjustment + $('#navUtility').height();
+                        }
+                        oTarget = oCord.closest('div.panel-accordion');
+                        oHead = oCord.siblings('div.panel-heading');
+                        iTotalAdjustment = iTotalAdjustment + oHead.height();
+                        if (oTarget.length) {
+                            $('body,html').scrollTop(oTarget.offset().top - iTotalAdjustment);
+                        }
+                    }, 100);
+                }
+                else if (typeof aElement != "undefined" && aElement.length) {
+                    var iTotalAdjustment = 0;
+                    if ($('div.stickyH1Spacer') != null) {
+                        iTotalAdjustment = iTotalAdjustment + $('div.stickyH1Spacer').height();
+                    }
+                    if ($('div.stickyPageHeaderSpacer') != null) {
+                        iTotalAdjustment = iTotalAdjustment + $('div.stickyPageHeaderSpacer').height();
+                    }
+                    if ($('div.stickyNavUtilitySpacer') != null) {
+                        iTotalAdjustment = iTotalAdjustment + $('div.stickyNavUtilitySpacer').height();
+                    }
+                    if ($('#navUtility') != null) {
+                        iTotalAdjustment = iTotalAdjustment + $('#navUtility').height();
+                    }
+                    aCord = $(aElement);
+                    aCord.collapse('show');
+                    // Bring it into view.
+                    setTimeout(function () {
+                        aTarget = aCord.closest('div.tab-pane');
+                        if (aTarget.length) {
+                            $('body,html').scrollTop(aTarget.offset().top - iTotalAdjustment);
+                        }
+                    }, 100);
+                }
+                else if (typeof oElement != "undefined" && oElement.length) {
+                    // If we don't find any other accordions or tabs then try to locate
+                    // an accordion via the old way using IDs.
+                    oCord = $(oElement);
+                    oCord.collapse('show');
+                    // Bring it into view.
+                    setTimeout(function () {
+                        var iTotalAdjustment = 0;
+                        if ($('div.stickyH1Spacer') != null) {
+                            iTotalAdjustment = iTotalAdjustment + $('div.stickyH1Spacer').height();
+                        }
+                        if ($('div.stickyPageHeaderSpacer') != null) {
+                            iTotalAdjustment = iTotalAdjustment + $('div.stickyPageHeaderSpacer').height();
+                        }
+                        if ($('div.stickyNavUtilitySpacer') != null) {
+                            iTotalAdjustment = iTotalAdjustment + $('div.stickyNavUtilitySpacer').height();
+                        }
+                        if ($('#navUtility') != null) {
+                            iTotalAdjustment = iTotalAdjustment + $('#navUtility').height();
+                        }
+                        oTarget = oCord.closest('div.panel-accordion');
+                        oHead = oCord.siblings('div.panel-heading');
+                        iTotalAdjustment = iTotalAdjustment + oHead.height();
+                        if (oTarget.length) {
+                            $('body,html').scrollTop(oTarget.offset().top - iTotalAdjustment);
+                        }
+                    }, 100);
+                }
+            }
+        }
+
+        //-----------------------------------------------------------------------------------------
+        // Initiate Background Video Functions
+        //
+        // Only load the videos on non-mobile devices which we will
+        // define as any screen size iPad or larger. We could use a user-agent thing
+        // here but that is often un-reliable.
+        //-----------------------------------------------------------------------------------------
+        function initiateBkgrdVideos() {
+            if (screen.width > 767) {
+                var thevids = document.querySelectorAll("video.bkgrdvid");
+                for (var v = 0; v < thevids.length; v++) {
+                    var vsources = thevids[v].children;
+                    for (var s = 0; s < vsources.length; s++) {
+                        vsources[s].setAttribute('src', vsources[s].getAttribute('data-src'));
+                    }
+                    thevids[v].load();
+                }
+            }
+        }
+
+        //-----------------------------------------------------------------------------------------
+        // Initiate Misc Functions
+        //-----------------------------------------------------------------------------------------
+        function initiateMisc() {
+            $('.navbar-header .collapsed').on('click', function () {
+                $(".navbar-toggle:not(.collapsed)").not(this).trigger('click');
+            });
+
+            // Modal bootstrap email viewer and general link in an iFrame displayer
+            $('a.modallink').on('click', function (e) {
+                e.preventDefault();
+                var src = this.href;
+                var height = $(this).attr('data-height') || 475;
+                $("#dscModal iframe").attr({ 'src': src, 'height': height });
+                $("#dscModal").modal();
+            });
+
+            $("#dscModal").on('hidden.bs.modal', function () {
+                // Clean up when the modal box closes so we don't gunk up the next call
+                var src = "";
+                $("#dscModal iframe").attr({ 'src': src });
+                // These are for the photo and instagram galleries
+                $('#dscModal').removeClass("umc-lightbox");
+                $("#dscModal .modal-header .modal-title").remove();
+                $("#dscModal .modal-body #imgwrap").remove();
+                $("#dscModal .modal-body #modalPrev").remove();
+                $("#dscModal .modal-body #modalNext").remove();
+                $("#dscModal .modal-footer #footwrap").remove();
+            });
+
+            $('#dscModal').on('shown.bs.modal', function () {
+                $("#modalPrev").focus();
+            });
+
+            // UMC Modal Lightbox
+            // The ekko-lightbox is unreliable especially in Safari and upgrading to the
+            // latest version majorly trashes the styling so we wrote our own.
+            $(document).on('click', '[data-toggle="lightbox"]', function (event) {
+                event.preventDefault();
+
+                // Get the gallery ID
+                var myGalSal = $(this).attr('data-gallery');
+                // Put all the gallery links in an array
+                var myRA = $('[data-gallery = ' + myGalSal + ']');
+                // Figure out where we are in the array
+                var myPos = $.inArray(this, myRA);
+
+                // Load up the modal markup that is at the bottom of every page
+                $("#dscModal .modal-header").append("<h4 class='modal-title'>" + myRA[myPos].dataset.title.replace(/qq/g, '"') + "</h4>");
+                $("#dscModal .modal-body").append("<div id='imgwrap'><img id='theImage' src='" + myRA[myPos].dataset.href + "' /></div><a id='modalPrev' href='#' class='fas fa-chevron-left'></a><a id='modalNext' href='#' class='fas fa-chevron-right'></a>");
+                $("#imgwrap").css({ 'display': 'table', 'margin': '0 auto' });
+                $("#dscModal .modal-footer").append("<div id='footwrap'>" + myRA[myPos].dataset.footer.replace(/qq/g, '"') + "</div>");
+
+                $('#dscModal').keydown(function (event) {
+                    switch (event.which) {
+                        case 37:
+                            event.preventDefault();
+                            moveBack();
+                            break;
+                        case 39:
+                            event.preventDefault();
+                            moveForward();
+                            break;
+                    }
+                });
+
+                // Handle previous and next actions
+                $('#modalPrev').on('click', function (event) {
+                    event.preventDefault();
+                    moveBack();
+                });
+
+                $('#modalNext').on('click', function (event) {
+                    event.preventDefault();
+                    moveForward();
+                });
+
+                // Add a class to the modal so that we can change the style
+                $('#dscModal').addClass("umc-lightbox");
+                // Show the modal
+                $('#dscModal').modal();
+                $('#dscModal').focus();
+
+                function moveBack() {
+                    if (myPos === 0) {
+                        myPos = myRA.length - 1;
+                    }
+                    else {
+                        myPos = myPos - 1;
+                    }
+                    fillIt();
+                }
+
+                function moveForward() {
+                    if (myPos === (myRA.length - 1)) {
+                        myPos = 0;
+                    }
+                    else {
+                        myPos = myPos + 1;
+                    }
+                    fillIt();
+                }
+
+                function fillIt() {
+                    $("#dscModal .modal-header .modal-title").remove();
+                    $("#dscModal .modal-header").append("<h4 class='modal-title'>" + myRA[myPos].dataset.title.replace(/qq/g, '"') + "</h4>");
+
+                    $("#dscModal .modal-body #theImage").attr({ 'src': myRA[myPos].dataset.href });
+
+                    $("#dscModal .modal-footer #footwrap").remove();
+                    $("#dscModal .modal-footer").append("<div id='footwrap'>" + myRA[myPos].dataset.footer.replace(/qq/g, '"') + "</div>");
+                }
+
+            });
+
+            // On Scroll / Resize Event - fire misc functions to handle certain functionality
+            $(window).on('scroll', function () {
+                chkSubnavVisibility();
+            }).on('resize', function () {
+                chkSubnavVisibility();
+            });
+        }
+
+        //-----------------------------------------------------------------------------------------
+        // Utility Functions (functions called from multiple triggers)
+        //-----------------------------------------------------------------------------------------
+
+        // Check for Subnav Visibility - Hide/Show subnav launch button in sticky header
+        function chkSubnavVisibility() {
+            var oSubnav = $('#submenu');
+
+            // Only if exists, and visible, and offcanvas is not triggered
+            // 2017-07-21 I added an ID of ibeenclicked to the secondary nav button so that we can check
+            // to see if it is active before we run this code.
+            // This prevents a situation where the page scrolls up when the button is clicked, the positions
+            // are recalculated here, and the sidebar comes out empty because the subnavOverride class
+            // gets removed.
+            if (oSubnav.length > 0 && oSubnav.is(':visible') && !$('body').hasClass('canvas-slid') && !$('#ibeenclicked').hasClass('active')) {
+                var oPageHeader = $('div.page-header'),
+                    iCurrentPosition = $(document).scrollTop(),
+                    iStickyHeight = $('.scroll-to-fixed-fixed').outerHeight(),
+                    iThreshold = (oSubnav.offset().top + oSubnav.outerHeight()) - iStickyHeight;
+
+                // Swap classes based on position
+                if (iCurrentPosition > iThreshold) {
+                    oPageHeader.addClass('showButton');
+                    $('body').addClass('subnavOverride');
+                } else {
+                    oPageHeader.removeClass('showButton');
+                    $('body').removeClass('subnavOverride');
+                }
+            }
+        }
+
+    }
+
+    // Make AwareWeb Object available in global namespace
+    window.AwareWeb = new AwareWeb();
+})(jQuery); // Pass jQuery global var for quicker access
+
+
+// Standard YouTube API Ready function(to better keep code visible we call function inside awareweb init)
+function onYouTubeIframeAPIReady() { setTimeout(AwareWeb.customYouTubeSliderInit, 500); }
+
+// Function to count css rules per sheet to not go over 4096 for older IE browsers; keeping commented out as we are needing to count this fairly regularly
+/*function countCSSRules() {
+	var results = '',
+		log = '';
+	if (!document.styleSheets) {
+		return;
+	}
+	for (var i = 0; i < document.styleSheets.length; i++) {
+		countSheet(document.styleSheets[i]);
+	}
+	function countSheet(sheet) {
+		var count = 0;
+		if (sheet && sheet.cssRules) {
+			for (var j = 0, l = sheet.cssRules.length; j < l; j++) {
+				if (!sheet.cssRules[j].selectorText) {
+					if (sheet.cssRules[j].cssRules) {
+						for (var m = 0, n = sheet.cssRules[j].cssRules.length; m < n; m++) {
+							if(sheet.cssRules[j].cssRules[m].selectorText) {
+								count += sheet.cssRules[j].cssRules[m].selectorText.split(',').length;
+							}
+						}
+					}
+				}
+				else {
+					count += sheet.cssRules[j].selectorText.split(',').length;
+				}
+			}
+
+			log += '\nFile: ' + (sheet.href ? sheet.href : 'inline <style> tag');
+			log += '\nRules: ' + sheet.cssRules.length;
+			log += '\nSelectors: ' + count;
+			log += '\n--------------------------';
+			if (count >= 4096) {
+				results += '\n********************************\nWARNING:\n There are ' + count + ' CSS rules in the stylesheet ' + sheet.href + ' - IE will ignore the last ' + (count - 4096) + ' rules!\n';
+			}
+		}
+	}
+	console.log(log);
+	console.log(results);
+};
+countCSSRules();*/
